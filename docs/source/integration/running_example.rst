@@ -87,7 +87,8 @@ From the ``software/scripts/`` directory of the example project:
         --roceMinRnrTimer 31 \
         --roceRnrRetry    7 \
         --roceRetryCount  3 \
-        --roceMaxPay      1024
+        --roceMaxPay      1024 \
+        --useDcqcn
 
 Argument reference:
 
@@ -125,6 +126,10 @@ Argument reference:
    * - ``--roceMaxPay``
      - Maximum payload size in bytes per RDMA WRITE slot.  Must be ≤ the
        path MTU.  Example: ``1024``.
+   * - ``--useDcqcn``
+     - Enable DCQCN congestion control.  Writes the initial DCQCN register
+       values to the FPGA engine during startup (see :doc:`../dcqcn/registers`).
+       Recommended whenever the link may experience congestion.
 
 Expected output
 ~~~~~~~~~~~~~~~
