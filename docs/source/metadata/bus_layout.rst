@@ -144,103 +144,106 @@ Constant Definitions
 QP Attribute Bus (212 bits, LSB-first)
 ----------------------------------------
 
-The ``attr`` field used in QP modify requests packs the QP attributes
-LSB-first in this order:
+The ``attr`` field used in QP modify requests.  Bit positions are
+relative to bit 0 of the ``attr`` block (= bit 84 of the full TX bus).
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 15 15 50
+   :widths: 25 15 10 50
 
    * - Field
-     - Bits (lsb:msb)
+     - Bits (within ``attr``)
      - Width
      - Description
    * - ``qpaRnrRetry``
-     - [2:0]
+     - ``[2:0]``
      - 3
      - RNR retry count
    * - ``qpaRetryCnt``
-     - [5:3]
+     - ``[5:3]``
      - 3
      - Retry count
    * - ``qpaTimeOut``
-     - [10:6]
+     - ``[10:6]``
      - 5
      - Local ACK timeout
    * - ``qpaRnrTimer``
-     - [15:11]
+     - ``[15:11]``
      - 5
      - RNR NAK timer
    * - ``qpaMaxDestReadAtomic``
-     - [23:16]
+     - ``[23:16]``
      - 8
      - Max incoming RDMA read/atomic
    * - ``qpaMaxReadAtomic``
-     - [31:24]
+     - ``[31:24]``
      - 8
      - Max outstanding RDMA read/atomic
    * - ``qpaSqDraining``
-     - [32]
+     - ``[32:32]``
      - 1
      - SQ draining flag
    * - ``qpaPKey``
-     - [48:33]
+     - ``[48:33]``
      - 16
      - Partition key
    * - ``qpaCap``
-     - [88:49]
+     - ``[88:49]``
      - 40
      - QP capabilities word
    * - ``qpaAccFlags``
-     - [96:89]
+     - ``[96:89]``
      - 8
      - QP access flags
    * - ``qpaDqpn``
-     - [120:97]
+     - ``[120:97]``
      - 24
      - Destination QP number
    * - ``qpaSqPsn``
-     - [144:121]
+     - ``[144:121]``
      - 24
      - Send starting PSN
    * - ``qpaRqPsn``
-     - [168:145]
+     - ``[168:145]``
      - 24
      - Receive starting PSN
    * - ``qpaQKey``
-     - [200:169]
+     - ``[200:169]``
      - 32
      - Q-Key
    * - ``qpaPmtu``
-     - [203:201]
+     - ``[203:201]``
      - 3
      - Path MTU
    * - ``qpaCurrQpState``
-     - [207:204]
+     - ``[207:204]``
      - 4
      - Expected current QP state
    * - ``qpaQpState``
-     - [211:208]
+     - ``[211:208]``
      - 4
      - Target QP state
 
 QP Init Attribute Bus (5 bits, LSB-first)
 ------------------------------------------
 
+Bit positions relative to bit 0 of the ``initAttr`` block
+(= bit 296 of the full TX bus).
+
 .. list-table::
    :header-rows: 1
-   :widths: 20 15 15 50
+   :widths: 25 15 10 50
 
    * - Field
-     - Bits
+     - Bits (within ``initAttr``)
      - Width
      - Description
    * - ``qpiSqSigAll``
-     - [0]
+     - ``[0:0]``
      - 1
      - Signal all send completions
    * - ``qpiType``
-     - [4:1]
+     - ``[4:1]``
      - 4
      - QP type (``IBV_QPT_RC = 2``)
 

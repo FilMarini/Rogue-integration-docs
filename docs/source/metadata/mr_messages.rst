@@ -1,118 +1,130 @@
 MR Messages (Memory Region)
 ============================
 
-Memory Region messages register or deregister a memory region in the FPGA's
-internal resource manager.  The bus type tag is ``1`` (``METADATA_MR_T``).
+Memory Region messages register or deregister a memory region.
+Bus type tag: ``1`` (``METADATA_MR_T``).
 
-Fields are packed **LSB-first** from bit 0.  The ``busType`` sits at the
-two MSBs ([302:301] TX, [275:274] RX).
+Fields are packed **LSB-first** from bit 0.  ``busType`` is fixed at the
+two MSBs of the bus.
 
-MR Request (TX bus)
---------------------
+.. note::
+   With ``MAX_MR = 16`` and ``MAX_PD = 1``:
+   ``MR_INDEX_B = 4``, ``MR_LKEYPART_B = MR_RKEYPART_B = 28``.
 
-The TX request fields are packed from bit 0 in this order (exact field
-ordering mirrors the PD/QP convention — LSB-first, no padding):
+MR Request (TX, 303-bit bus)
+-----------------------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 15 55
+   :widths: 20 15 15 50
 
    * - Field
-     - Width (bits)
+     - Bits
+     - Width
      - Description
    * - ``allocOrNot``
+     - ``[0:0]``
      - 1
      - ``1`` = register (allocate), ``0`` = deregister (free).
    * - ``laddr``
+     - ``[64:1]``
      - 64
      - Host virtual address of the memory region (``ibv_mr.addr``).
    * - ``len``
+     - ``[96:65]``
      - 32
      - Byte length of the memory region.
    * - ``accFlags``
+     - ``[104:97]``
      - 8
-     - Access permissions.  Use ``0x0F`` for the FPGA-target MR
-       (local write + remote write + remote read + remote atomic).
+     - Access permissions.  Use ``0x0F`` for the FPGA-target MR.
        See :doc:`bus_layout` §Access Permissions.
    * - ``pdHandler``
+     - ``[136:105]``
      - 32
      - PD handler from the PD allocation response.
    * - ``lkeyOrNot``
+     - ``[137:137]``
      - 1
      - ``1`` = also allocate an lkey (always ``1`` in practice).
    * - ``lkeyPart``
-     - ``MR_LKEYPART_B``
-     - Partial lkey (upper bits).  Pass ``0``; FPGA assigns.
+     - ``[165:138]``
+     - 28
+     - Partial lkey upper bits.  Pass ``0``; FPGA assigns.
    * - ``rkeyPart``
-     - ``MR_RKEYPART_B``
-     - Partial rkey (upper bits).  Pass the host ``ibv_mr.rkey``
-       right-shifted by ``MR_INDEX_B`` bits to strip the slot index.
+     - ``[193:166]``
+     - 28
+     - Partial rkey upper bits.  Pass ``host_rkey >> 4`` (strip the
+       4-bit ``MR_INDEX_B`` slot index from the host ``ibv_mr.rkey``).
    * - ``busType``
+     - ``[302:301]``
      - 2
-     - ``1`` (MR).  Always at bits [302:301].
+     - ``1`` (MR).  Fixed at the two MSBs.
 
-MR Response (RX bus)
----------------------
-
-The response fields are packed from bit 0 as follows (derived from the
-``respMr`` class):
+MR Response (RX, 276-bit bus)
+------------------------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 35 35 30
+   :widths: 20 15 15 50
 
    * - Field
-     - Bit range
+     - Bits
+     - Width
      - Description
    * - ``rKey``
-     - ``[MR_KEY_B−1 : 0]``
-     - Full remote key assigned to this MR.
+     - ``[31:0]``
+     - 32
+     - Full remote key assigned to this MR by the FPGA.
    * - ``lKey``
-     - ``[2·MR_KEY_B−1 : MR_KEY_B]``
-     - Full local key assigned to this MR.
+     - ``[63:32]``
+     - 32
+     - Full local key assigned to this MR by the FPGA.  Write this
+       to the WorkReqDispatcher ``lKey`` register.
    * - ``mrRKeyPart``
-     - ``[2·MR_KEY_B + MR_RKEYPART_B−1 : 2·MR_KEY_B]``
-     - Partial rkey (upper bits).
+     - ``[91:64]``
+     - 28
+     - Partial rkey (upper 28 bits, without the 4-bit slot index).
    * - ``mrLKeyPart``
-     - next ``MR_LKEYPART_B`` bits
-     - Partial lkey (upper bits).
+     - ``[119:92]``
+     - 28
+     - Partial lkey (upper 28 bits).
    * - ``mrPdHandler``
-     - next 32 bits
-     - PD handler associated with this MR.
+     - ``[151:120]``
+     - 32
+     - PD handler associated with this MR (echoed from request).
    * - ``mrAccFlags``
-     - next 8 bits
-     - Access flags echoed from the request.
+     - ``[159:152]``
+     - 8
+     - Access flags (echoed from request).
    * - ``mrLen``
-     - next 32 bits
-     - Length echoed from the request.
+     - ``[191:160]``
+     - 32
+     - Length (echoed from request).
    * - ``mrLAddr``
-     - next 64 bits
-     - Local address echoed from the request.
+     - ``[255:192]``
+     - 64
+     - Local address (echoed from request).
    * - ``successOrNot``
-     - next 1 bit
-     - ``1`` = success.
+     - ``[256]``
+     - 1
+     - ``1`` = success, ``0`` = failure.
    * - ``busType``
      - ``[275:274]``
-     - ``1`` — echoes the MR request type.
+     - 2
+     - ``1`` — echoes the MR request type.  Fixed at the two MSBs.
 
-The fields most commonly used by the host are ``lKey`` (to be written into
-the WorkReqDispatcher ``lKey`` register) and ``successOrNot``.
+Python decoder:
 
-rkey vs rkeyPart
-~~~~~~~~~~~~~~~~~
+.. code-block:: python
 
-The host ``ibv_mr.rkey`` is a 32-bit value.  The FPGA's MR resource manager
-uses the lowest ``MR_INDEX_B`` bits as a slot index.  When sending the MR
-allocation request, supply ``rkeyPart = rkey >> MR_INDEX_B`` (the upper
-``MR_RKEYPART_B`` bits).  The FPGA reassembles the full rkey by appending
-the slot index.
-
-MR Length and Slot Layout
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The ``len`` field should be set to the full slab size::
-
-    len = rxQueueDepth × maxPayload
-
-This covers the entire pre-registered MR slab and allows the FPGA to write
-into any slot offset within it.
+    rKey         = rx & 0xFFFFFFFF
+    lKey         = (rx >> 32) & 0xFFFFFFFF
+    mrRKeyPart   = (rx >> 64) & 0x0FFFFFFF
+    mrLKeyPart   = (rx >> 92) & 0x0FFFFFFF
+    mrPdHandler  = (rx >> 120) & 0xFFFFFFFF
+    mrAccFlags   = (rx >> 152) & 0xFF
+    mrLen        = (rx >> 160) & 0xFFFFFFFF
+    mrLAddr      = (rx >> 192) & 0xFFFFFFFFFFFFFFFF
+    successOrNot = (rx >> 256) & 1
+    busType      = (rx >> 274) & 0x3

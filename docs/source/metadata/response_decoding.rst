@@ -2,25 +2,15 @@ Response Decoding
 =================
 
 All metadata responses share the same 276-bit RX bus format.  The
-``busType`` tag always sits at bits **[275:274]**; all payload fields are
+``busType`` tag is always at bits **[275:274]**.  All payload fields are
 packed **LSB-first** from bit 0.
 
-Reading the Bus Type and Success Flag
---------------------------------------
-
-The ``busType`` and ``successOrNot`` positions are fixed across all
-response types:
+Reading the Bus Type
+--------------------
 
 .. code-block:: python
 
-    busType     = (rx >> 274) & 0x3
-    # successOrNot position depends on message type:
-    #   PD:  bit  PD_KEY_B + PD_HANDLER_B
-    #   MR:  bit  (sum of all MR payload fields)
-    #   QP:  bit  273
-
-The QP response is the special case where ``successOrNot`` is always at
-bit 273 (immediately below ``busType``).
+    busType = (rx >> 274) & 0x3   # always at [275:274]
 
 Dispatch by Bus Type
 --------------------
@@ -33,7 +23,6 @@ Dispatch by Bus Type
 
     def decode_response(rx: int):
         bt = (rx >> 274) & 0x3
-
         if bt == METADATA_PD_T:
             return decode_pd_resp(rx)
         elif bt == METADATA_MR_T:
@@ -44,54 +33,72 @@ Dispatch by Bus Type
             raise RoceMetaDataError(f"Unknown busType={bt}")
 
     def decode_pd_resp(rx: int):
-        pdKey        = rx & ((1 << PD_KEY_B) - 1)
-        pdHandler    = (rx >> PD_KEY_B) & 0xFFFFFFFF
-        successOrNot = (rx >> (PD_KEY_B + PD_HANDLER_B)) & 1
+        pdKey        = rx & 0xFFFFFFFF          # [31:0]
+        pdHandler    = (rx >> 32) & 0xFFFFFFFF  # [63:32]
+        successOrNot = (rx >> 64) & 1           # [64]
         return successOrNot, pdHandler
 
     def decode_mr_resp(rx: int):
-        rKey         = rx & 0xFFFFFFFF
-        lKey         = (rx >> MR_KEY_B) & 0xFFFFFFFF
-        # successOrNot is above all the MR payload fields
-        offset       = MR_KEY_B + MR_KEY_B + MR_RKEYPART_B + \
-                       MR_LKEYPART_B + MR_PDHANDLER_B + \
-                       MR_ACCFLAGS_B + MR_LEN_B + MR_LADDR_B
-        successOrNot = (rx >> offset) & 1
+        rKey         = rx & 0xFFFFFFFF                      # [31:0]
+        lKey         = (rx >> 32) & 0xFFFFFFFF              # [63:32]
+        successOrNot = (rx >> 256) & 1                      # [256]
         return successOrNot, lKey, rKey
 
     def decode_qp_resp(rx: int):
-        qpn          = (rx >> 249) & 0xFFFFFF
-        successOrNot = (rx >> 273) & 1
-        qp_state     = (rx >> 213) & 0xF   # qpaQpState
-        return successOrNot, qpn, qp_state
+        qpn          = (rx >> 249) & 0xFFFFFF   # [272:249]
+        successOrNot = (rx >> 273) & 1           # [273]
+        qpaQpState   = (rx >> 213) & 0xF         # [216:213]
+        pdHandler    = (rx >> 217) & 0xFFFFFFFF  # [248:217]
+        return successOrNot, qpn, qpaQpState, pdHandler
+
+``successOrNot`` Position Summary
+----------------------------------
+
+The ``successOrNot`` bit sits at a different absolute position depending on
+message type, because it immediately follows the payload fields:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 15 70
+
+   * - Type
+     - Bit
+     - Reason
+   * - PD
+     - ``[64]``
+     - After ``pdKey[31:0]`` + ``pdHandler[63:32]``
+   * - MR
+     - ``[256]``
+     - After all MR payload fields (rKey+lKey+parts+handler+flags+len+addr)
+   * - QP
+     - ``[273]``
+     - Fixed, immediately below ``busType[275:274]``
 
 Failure Cases
 -------------
 
-When ``successOrNot = 0``, the FPGA does not populate the payload fields.
-Common causes:
+When ``successOrNot = 0``:
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 80
+   :widths: 15 85
 
    * - Message
-     - Failure conditions
+     - Common failure conditions
    * - PD alloc
-     - No free PD slots (``MAX_PD = 1`` already allocated — previous
-       session was not torn down cleanly)
+     - ``MAX_PD = 1`` already allocated — previous session was not torn
+       down cleanly.  Reset the FPGA firmware.
    * - MR alloc
-     - Invalid ``pdHandler``, or no free MR slots
+     - Invalid ``pdHandler``, or no free MR slots.
    * - QP create
-     - Internal resource exhaustion
+     - Internal resource exhaustion.
    * - QP modify
-     - Invalid QP number; invalid state transition; unsupported
-       attribute mask
+     - Invalid QP number; invalid state transition; unsupported mask.
 
 Polling Best Practices
 ----------------------
 
-Always implement a **timeout** when waiting for ``RecvMetaData``:
+Always use the ``0→1→0`` pulse and include a timeout:
 
 .. code-block:: python
 
