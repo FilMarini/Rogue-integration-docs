@@ -2,14 +2,12 @@ Bus Layout Reference
 ====================
 
 This page gives the exact bit layout of every field across all message types.
-All positions are given as bit indices within the full 303-bit TX bus or
-276-bit RX bus, with bit 302 (TX) / bit 275 (RX) being the most significant.
+All fields are packed **LSB-first**: field 0 starts at bit 0, each successive
+field is placed immediately above the previous one.  The ``busType`` tag
+always occupies the two most-significant bits of the bus.
 
 Constant Definitions
 --------------------
-
-The following constants appear throughout the field tables.  They are defined
-in the pyrogue layer and in the FPGA firmware.
 
 .. list-table::
    :header-rows: 1
@@ -25,10 +23,9 @@ in the pyrogue layer and in the FPGA firmware.
      - 276
      - Total width of the RX metadata bus
    * - ``PD_INDEX_B``
-     - 3
-     - Bits to index ``MAX_PD`` Protection Domains.  Note: the engine
-       currently supports ``MAX_PD = 1``; only one PD can be active at
-       a time.
+     - ``log2(MAX_PD)``
+     - Bits to index Protection Domains.  ``MAX_PD = 1``, so
+       ``PD_INDEX_B = 0``.
    * - ``PD_ALLOC_OR_NOT_B``
      - 1
      - Allocate (1) or free (0) flag
@@ -36,11 +33,11 @@ in the pyrogue layer and in the FPGA firmware.
      - 32
      - PD handler width
    * - ``PD_KEY_B``
-     - 29
-     - PD key width (``PD_HANDLER_B – PD_INDEX_B``)
+     - ``PD_HANDLER_B − PD_INDEX_B``
+     - PD key width
    * - ``MR_INDEX_B``
-     - 4
-     - Bits to index ``MAX_MR_PER_PD = 16``
+     - ``log2(MAX_MR / MAX_PD)``
+     - Bits to index MRs per PD
    * - ``MR_ALLOC_OR_NOT_B``
      - 1
      - Allocate (1) or free (0) flag
@@ -60,11 +57,11 @@ in the pyrogue layer and in the FPGA firmware.
      - 32
      - lkey / rkey width
    * - ``MR_LKEYPART_B``
-     - 28
-     - lkey partial (``MR_KEY_B – MR_INDEX_B``)
+     - ``MR_KEY_B − MR_INDEX_B``
+     - lkey partial
    * - ``MR_RKEYPART_B``
-     - 28
-     - rkey partial (``MR_KEY_B – MR_INDEX_B``)
+     - ``MR_KEY_B − MR_INDEX_B``
+     - rkey partial
    * - ``MR_LKEYORNOT_B``
      - 1
      - 1 = allocate lkey, 0 = skip
@@ -79,16 +76,16 @@ in the pyrogue layer and in the FPGA firmware.
      - Target QP state
    * - ``QPA_CURRQPSTATE_B``
      - 4
-     - Expected current QP state (0 = don't care)
+     - Expected current QP state
    * - ``QPA_PMTU_B``
      - 3
      - Path MTU (``IBV_MTU_4096 = 5``)
    * - ``QPA_QKEY_B``
      - 32
-     - Q-Key (RC QPs: unused, set to 0)
+     - Q-Key (RC: set to 0)
    * - ``QPA_RQPSN_B``
      - 24
-     - Remote/receive starting PSN
+     - Receive/remote starting PSN
    * - ``QPA_SQPSN_B``
      - 24
      - Send starting PSN
@@ -110,7 +107,7 @@ in the pyrogue layer and in the FPGA firmware.
    * - ``QPA_MAXREADATOMIC_B``
      - 8
      - Max outstanding RDMA read/atomic (initiator)
-   * - ``QPA_MAXDESTRD_B``
+   * - ``QPA_MAXDESTREADATOMIC_B``
      - 8
      - Max incoming RDMA read/atomic (responder)
    * - ``QPA_RNRTIMER_B``
@@ -127,7 +124,7 @@ in the pyrogue layer and in the FPGA firmware.
      - RNR retry count
    * - ``QP_REQTYPE_B``
      - 2
-     - Request sub-type (0=create, 1=modify)
+     - Request sub-type (0=create, 1=destroy, 2=modify, 3=query)
    * - ``QP_PDHANDLER_B``
      - 32
      - PD handler for QP create
@@ -136,7 +133,7 @@ in the pyrogue layer and in the FPGA firmware.
      - QP number
    * - ``QP_ATTRMASK_B``
      - 26
-     - Attribute mask (which fields are valid)
+     - Attribute mask
    * - ``QP_ATTR_B``
      - 212
      - Total QP attribute payload width
@@ -144,56 +141,115 @@ in the pyrogue layer and in the FPGA firmware.
      - 5
      - Init attribute width (``QPI_TYPE_B + QPI_SQSIGALL_B``)
 
-TX Bus Map (303 bits)
-----------------------
+QP Attribute Bus (212 bits, LSB-first)
+----------------------------------------
 
-The bus is transmitted as a Python integer.  Bit 302 is the MSB.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 20 60
-
-   * - Bits
-     - Field
-     - Notes
-   * - ``[302:301]``
-     - ``busType``
-     - 0=PD, 1=MR, 2=QP
-   * - ``[300:N+1]``
-     - padding
-     - Zero-filled.  Size depends on message type.
-   * - ``[N:0]``
-     - payload
-     - Message-specific fields, packed MSB-first
-
-RX Bus Map (276 bits)
-----------------------
+The ``attr`` field used in QP modify requests packs the QP attributes
+LSB-first in this order:
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 20 60
+   :widths: 20 15 15 50
 
-   * - Bits
-     - Field
-     - Notes
-   * - ``[275:274]``
-     - ``busType``
-     - Echoes the request bus type
-   * - ``[273]``
-     - ``successOrNot``
-     - 1 = success, 0 = failure
-   * - ``[272:0]``
-     - payload
-     - Message-specific response fields
+   * - Field
+     - Bits (lsb:msb)
+     - Width
+     - Description
+   * - ``qpaRnrRetry``
+     - [2:0]
+     - 3
+     - RNR retry count
+   * - ``qpaRetryCnt``
+     - [5:3]
+     - 3
+     - Retry count
+   * - ``qpaTimeOut``
+     - [10:6]
+     - 5
+     - Local ACK timeout
+   * - ``qpaRnrTimer``
+     - [15:11]
+     - 5
+     - RNR NAK timer
+   * - ``qpaMaxDestReadAtomic``
+     - [23:16]
+     - 8
+     - Max incoming RDMA read/atomic
+   * - ``qpaMaxReadAtomic``
+     - [31:24]
+     - 8
+     - Max outstanding RDMA read/atomic
+   * - ``qpaSqDraining``
+     - [32]
+     - 1
+     - SQ draining flag
+   * - ``qpaPKey``
+     - [48:33]
+     - 16
+     - Partition key
+   * - ``qpaCap``
+     - [88:49]
+     - 40
+     - QP capabilities word
+   * - ``qpaAccFlags``
+     - [96:89]
+     - 8
+     - QP access flags
+   * - ``qpaDqpn``
+     - [120:97]
+     - 24
+     - Destination QP number
+   * - ``qpaSqPsn``
+     - [144:121]
+     - 24
+     - Send starting PSN
+   * - ``qpaRqPsn``
+     - [168:145]
+     - 24
+     - Receive starting PSN
+   * - ``qpaQKey``
+     - [200:169]
+     - 32
+     - Q-Key
+   * - ``qpaPmtu``
+     - [203:201]
+     - 3
+     - Path MTU
+   * - ``qpaCurrQpState``
+     - [207:204]
+     - 4
+     - Expected current QP state
+   * - ``qpaQpState``
+     - [211:208]
+     - 4
+     - Target QP state
+
+QP Init Attribute Bus (5 bits, LSB-first)
+------------------------------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 15 15 50
+
+   * - Field
+     - Bits
+     - Width
+     - Description
+   * - ``qpiSqSigAll``
+     - [0]
+     - 1
+     - Signal all send completions
+   * - ``qpiType``
+     - [4:1]
+     - 4
+     - QP type (``IBV_QPT_RC = 2``)
 
 Access Permissions (``accFlags``)
 ----------------------------------
 
-The ``accFlags`` byte in MR and QP messages uses the IB access flag encoding:
-
 .. list-table::
    :header-rows: 1
-   :widths: 15 15 70
+   :widths: 10 15 75
 
    * - Bit
      - Mask
@@ -211,8 +267,7 @@ The ``accFlags`` byte in MR and QP messages uses the IB access flag encoding:
      - ``0x08``
      - ``IBV_ACCESS_REMOTE_ATOMIC``
 
-For the host MR (target of FPGA WRITEs), the recommended flags are
-``ACC_PERM = 0x0F`` (all four permissions).
+For the host MR (target of FPGA WRITEs), use ``ACC_PERM = 0x0F``.
 
 QP State Encoding
 ------------------
@@ -245,6 +300,32 @@ QP State Encoding
    * - 6
      - ``IBV_QPS_ERR``
      - Error
+   * - 8
+     - ``IBV_QPS_CREATE``
+     - Created (firmware internal state)
+
+QP Request Type Encoding
+--------------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 20 70
+
+   * - Value
+     - Name
+     - Description
+   * - 0
+     - ``REQ_QP_CREATE``
+     - Create a new QP
+   * - 1
+     - ``REQ_QP_DESTROY``
+     - Destroy an existing QP
+   * - 2
+     - ``REQ_QP_MODIFY``
+     - Modify QP attributes / state
+   * - 3
+     - ``REQ_QP_QUERY``
+     - Query current QP state
 
 Path MTU Encoding
 ------------------
@@ -270,4 +351,4 @@ Path MTU Encoding
      - 2048
    * - 5
      - ``IBV_MTU_4096``
-     - 4096 (recommended for 10 GbE links)
+     - 4096 (recommended for 10 GbE)

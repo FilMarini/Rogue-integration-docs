@@ -1,70 +1,75 @@
 Response Decoding
 =================
 
-All metadata responses share the same 276-bit RX bus format.  This page
-provides a unified reference for decoding responses and handling errors.
+All metadata responses share the same 276-bit RX bus format.  The
+``busType`` tag always sits at bits **[275:274]**; all payload fields are
+packed **LSB-first** from bit 0.
 
-Common Header
--------------
+Reading the Bus Type and Success Flag
+--------------------------------------
 
-Every response, regardless of type, has the same 3-bit header at the top of
-the 276-bit bus:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 20 20 60
-
-   * - Bits [275:0]
-     - Field
-     - Description
-   * - ``[275:274]``
-     - ``busType``
-     - Echoes the TX bus type (0=PD, 1=MR, 2=QP)
-   * - ``[273]``
-     - ``successOrNot``
-     - ``1`` = operation succeeded, ``0`` = failure
-
-Reading the Bus Type
---------------------
+The ``busType`` and ``successOrNot`` positions are fixed across all
+response types:
 
 .. code-block:: python
 
-    META_DATA_RX_BITS = 276
+    busType     = (rx >> 274) & 0x3
+    # successOrNot position depends on message type:
+    #   PD:  bit  PD_KEY_B + PD_HANDLER_B
+    #   MR:  bit  (sum of all MR payload fields)
+    #   QP:  bit  273
 
-    def rx_bus_type(rx: int) -> int:
-        return (rx >> (META_DATA_RX_BITS - 2)) & 0x3
-
-    def rx_success(rx: int) -> bool:
-        return bool((rx >> (META_DATA_RX_BITS - 3)) & 1)
+The QP response is the special case where ``successOrNot`` is always at
+bit 273 (immediately below ``busType``).
 
 Dispatch by Bus Type
 --------------------
 
 .. code-block:: python
 
-    BUS_TYPE_PD = 0
-    BUS_TYPE_MR = 1
-    BUS_TYPE_QP = 2
+    METADATA_PD_T = 0
+    METADATA_MR_T = 1
+    METADATA_QP_T = 2
 
     def decode_response(rx: int):
-        bt = rx_bus_type(rx)
-        if not rx_success(rx):
-            raise RoceMetaDataError(f"FPGA returned failure for bus_type={bt}")
+        bt = (rx >> 274) & 0x3
 
-        if bt == BUS_TYPE_PD:
+        if bt == METADATA_PD_T:
             return decode_pd_resp(rx)
-        elif bt == BUS_TYPE_MR:
+        elif bt == METADATA_MR_T:
             return decode_mr_resp(rx)
-        elif bt == BUS_TYPE_QP:
+        elif bt == METADATA_QP_T:
             return decode_qp_resp(rx)
         else:
-            raise RoceMetaDataError(f"Unknown bus_type={bt} in response")
+            raise RoceMetaDataError(f"Unknown busType={bt}")
 
-Failure Codes
+    def decode_pd_resp(rx: int):
+        pdKey        = rx & ((1 << PD_KEY_B) - 1)
+        pdHandler    = (rx >> PD_KEY_B) & 0xFFFFFFFF
+        successOrNot = (rx >> (PD_KEY_B + PD_HANDLER_B)) & 1
+        return successOrNot, pdHandler
+
+    def decode_mr_resp(rx: int):
+        rKey         = rx & 0xFFFFFFFF
+        lKey         = (rx >> MR_KEY_B) & 0xFFFFFFFF
+        # successOrNot is above all the MR payload fields
+        offset       = MR_KEY_B + MR_KEY_B + MR_RKEYPART_B + \
+                       MR_LKEYPART_B + MR_PDHANDLER_B + \
+                       MR_ACCFLAGS_B + MR_LEN_B + MR_LADDR_B
+        successOrNot = (rx >> offset) & 1
+        return successOrNot, lKey, rKey
+
+    def decode_qp_resp(rx: int):
+        qpn          = (rx >> 249) & 0xFFFFFF
+        successOrNot = (rx >> 273) & 1
+        qp_state     = (rx >> 213) & 0xF   # qpaQpState
+        return successOrNot, qpn, qp_state
+
+Failure Cases
 -------------
 
 When ``successOrNot = 0``, the FPGA does not populate the payload fields.
-The following conditions cause the FPGA to return a failure:
+Common causes:
 
 .. list-table::
    :header-rows: 1
@@ -73,18 +78,15 @@ The following conditions cause the FPGA to return a failure:
    * - Message
      - Failure conditions
    * - PD alloc
-     - No free PD slots (``MAX_PD`` already allocated)
-   * - PD free
-     - Invalid ``pdHandler`` (handler not in use)
+     - No free PD slots (``MAX_PD = 1`` already allocated — previous
+       session was not torn down cleanly)
    * - MR alloc
-     - No free MR slots for the given PD; invalid ``pdHandler``
-   * - MR free
-     - Invalid MR/PD combination
+     - Invalid ``pdHandler``, or no free MR slots
    * - QP create
      - Internal resource exhaustion
    * - QP modify
-     - Invalid QP number; invalid state transition; attribute mask
-       includes unsupported attributes
+     - Invalid QP number; invalid state transition; unsupported
+       attribute mask
 
 Polling Best Practices
 ----------------------
@@ -95,33 +97,18 @@ Always implement a **timeout** when waiting for ``RecvMetaData``:
 
     import time
 
-    METADATA_TIMEOUT_S = 2.0   # generous for FPGA processing
+    METADATA_TIMEOUT_S = 2.0
 
-    def wait_for_response(engine) -> int:
+    def send_metadata(engine, tx_value: int) -> int:
+        engine.SendMetaData.set(0)
+        engine.MetaDataTx.set(tx_value)
+        engine.SendMetaData.set(1)
+        engine.SendMetaData.set(0)
+
         deadline = time.monotonic() + METADATA_TIMEOUT_S
         while True:
             if engine.RecvMetaData.get():
                 return engine.MetaDataRx.get()
             if time.monotonic() > deadline:
-                raise TimeoutError(
-                    "Timed out waiting for MetaDataRx response"
-                )
+                raise TimeoutError("Timed out waiting for MetaDataRx")
             time.sleep(0.001)
-
-And always pulse ``SendMetaData`` as ``0 → 1 → 0`` to guarantee a clean
-rising edge, even at the start of a session:
-
-.. code-block:: python
-
-    def send_metadata(engine, tx_value: int) -> int:
-        engine.SendMetaData.set(0)        # ensure starting from 0
-        engine.MetaDataTx.set(tx_value)
-        engine.SendMetaData.set(1)        # rising edge triggers FPGA
-        engine.SendMetaData.set(0)        # clean up
-        return wait_for_response(engine)
-
-Complete Handshake Reference
------------------------------
-
-For a summary of the full six-step handshake with expected
-request/response pairs, see :doc:`../integration/connection_flow`.

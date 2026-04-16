@@ -75,11 +75,22 @@ Each metadata transaction is a **request–response** exchange:
 
        response = engine.MetaDataRx.get()
 
+Field Encoding Convention
+--------------------------
+
+Both TX and RX buses use **LSB-first** packing.  Fields are placed starting
+from **bit 0**, with each successive field immediately above the previous one.
+The two most-significant bits of each bus carry the ``busType`` tag:
+
+* TX bus (303 bits): ``busType`` at bits **[302:301]**
+* RX bus (276 bits): ``busType`` at bits **[275:274]**
+
+All other fields are packed from bit 0 upward in the order listed in the
+message definitions.  There is no padding between fields; the space between
+the top of the payload fields and the ``busType`` bits is unused/zero.
+
 Bus Type Field
 --------------
-
-Both ``MetaDataTx`` and ``MetaDataRx`` are tagged with a 2-bit **bus type**
-in their most-significant bits:
 
 .. list-table::
    :header-rows: 1
@@ -88,39 +99,15 @@ in their most-significant bits:
    * - Value
      - Name
      - Description
-   * - ``0b00``
+   * - ``0``
      - PD
      - Protection Domain request/response
-   * - ``0b01``
+   * - ``1``
      - MR
      - Memory Region request/response
-   * - ``0b10``
+   * - ``2``
      - QP
      - Queue Pair request/response
-   * - ``0b11``
-     - *Reserved*
-     - Not used
-
-The bus type occupies bits ``[302:301]`` of the 303-bit TX bus and bits
-``[275:274]`` of the 276-bit RX bus.
-
-Field Encoding Convention
---------------------------
-
-All multi-bit fields are packed **MSB-first** (big-endian) within the bus
-integer.  The first field listed in each message occupies the most-significant
-bits immediately after the bus-type field.  Padding zeros fill unused bits
-between the bus-type header and the payload fields (lower bits).
-
-The general layout of a TX message::
-
-    Bit 302         Bit 301        Bit 300 ... Bit N+1  Bit N ... Bit 0
-    ┌─────────────────────┬──────────────────────────┬──────────────────┐
-    │  busType [302:301]  │  padding (zeros)          │  payload fields  │
-    └─────────────────────┴──────────────────────────┴──────────────────┘
-
-Where ``N`` is determined by the total width of the payload fields for that
-message type (see the individual message pages).
 
 Message Types
 -------------
