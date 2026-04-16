@@ -15,7 +15,7 @@ Sequence Diagram
 
 ::
 
-    HOST (Python / C++)                  FPGA (BSV RoCEv2 Engine)
+    HOST (Python / C++)                  FPGA (RoCEv2 Engine)
     ─────────────────────────────────    ───────────────────────────────
 
     1. ibv_reg_mr()
@@ -82,8 +82,8 @@ The ``Server`` exposes ``getQpNum()``, ``getGid()``, ``getMrAddr()``,
 Steps 3–10: Metadata Bus Handshake
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Performed by ``RoceEngine._setup_connection()`` called from
-``RoCEv2Server._start()``.
+Performed by ``RoCEv2Server._start()`` directly via the internal metadata
+bus helpers:
 
 Each metadata transaction follows the send/response protocol described in
 :doc:`../metadata/overview`.  The Python method:

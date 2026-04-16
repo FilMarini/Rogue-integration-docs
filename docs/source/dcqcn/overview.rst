@@ -18,12 +18,12 @@ making it compatible with the zero-copy, kernel-bypass goals of RDMA.
 Why It Matters Here
 -------------------
 
-Without congestion control, a 100 GbE RDMA flow can overwhelm switch buffers
+Without congestion control, a 10 GbE RDMA flow can overwhelm switch buffers
 and cause packet drops, which degrade to retransmission storms that kill
 throughput.  In detector readout at SLAC, data bursts can be large and
 irregular, making DCQCN essential for stable operation.
 
-The SLAC BSV RoCEv2 engine implements DCQCN natively.  The host configures
+The SLAC RoCEv2 engine implements DCQCN natively.  The host configures
 its parameters via AXI-lite registers (see :doc:`registers`).
 
 Algorithm Summary
@@ -98,7 +98,7 @@ Default Parameter Values
 -------------------------
 
 The following defaults are used in ``RoCEv2Server._start()`` when writing
-DCQCN registers.  They are suitable for a 25–100 GbE FPGA-to-host link and
+DCQCN registers.  They are suitable for a 10 GbE FPGA-to-host link and
 can be tuned via pyrogue variables after startup:
 
 .. list-table::

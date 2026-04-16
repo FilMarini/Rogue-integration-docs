@@ -5,49 +5,50 @@ High-Level Diagram
 ------------------
 
 The integration adds a new ``rogue.protocols.rocev2`` module that sits
-alongside the existing UDP stack.  The two stacks share the same SRP/UDP
-register access path::
+alongside the existing UDP stack.  Both the RoCEv2 data traffic and the
+SRP/UDP register traffic share the **same physical 10 GbE link** — they are
+distinguished only by UDP port: RoCEv2 uses the mandatory port **4791**,
+while SRP/UDP uses a separate application port (e.g. 8192)::
 
     ┌─────────────────────────────────────────────────────────┐
     │  FPGA                                                   │
     │                                                         │
     │  ┌──────────────┐    AXI-lite    ┌───────────────────┐  │
     │  │  User Logic  │◄──────────────►│  RoCEv2 Engine    │  │
-    │  │  (Data Src)  │                │  (BSV)            │  │
+    │  │  (Data Src)  │                │  (surf / Verilog) │  │
     │  └──────┬───────┘                │                   │  │
     │         │  RDMA WRITE            │  PD/MR/QP Manager │  │
     │         │  with-Immediate        │  DCQCN            │  │
-    │         │                        └────────┬──────────┘  │
+    │         │  UDP port 4791         └────────┬──────────┘  │
     │         │                                 │ AXI-lite    │
     │         │                        ┌────────┴──────────┐  │
     │         │                        │  SRP/UDP Engine   │  │
+    │         │                        │  (app UDP port)   │  │
     │         │                        └────────┬──────────┘  │
     │         │                                 │             │
     └─────────┼─────────────────────────────────┼─────────────┘
-              │  100GbE (RoCEv2)                │  1GbE (UDP)
-              ▼                                 ▼
+              │        10 GbE (shared link)      │
+              │  RoCEv2 traffic (port 4791)       │  SRP/UDP traffic
+              ▼                                  ▼
     ┌─────────────────────────────────────────────────────────┐
     │  HOST                                                   │
     │                                                         │
-    │  ┌───────────────────────────────┐  ┌───────────────┐   │
-    │  │  rogue.protocols.rocev2       │  │  pyrogue      │   │
-    │  │                               │  │  SRP/UDP      │   │
-    │  │  RoCEv2Server (C++)           │  │  Register     │   │
-    │  │  ├─ libibverbs RC QP          │  │  Access       │   │
-    │  │  ├─ MR slab (pre-registered)  │  └───────┬───────┘   │
-    │  │  └─ CQ polling thread         │          │            │
-    │  │                               │  ┌───────┴───────┐   │
-    │  │  RoCEv2Server (Python)        │  │  RoceEngine   │   │
-    │  │  └─ _start(): handshake via   │◄─┤  pyrogue Dev  │   │
-    │  │     RoceEngine metadata msgs  │  │  (metadata    │   │
-    │  │                               │  │   bus writes) │   │
-    │  └──────────────┬────────────────┘  └───────────────┘   │
-    │                 │ rogue Frame stream                     │
-    │                 ▼                                        │
-    │  ┌──────────────────────────────┐                       │
-    │  │  pyrogue Application Devices │                       │
-    │  │  StreamWriter / DataReceiver │                       │
-    │  └──────────────────────────────┘                       │
+    │  ┌──────────────────────────────────────────────────┐   │
+    │  │  pyrogue.protocols.RoCEv2Server                  │   │
+    │  │                                                  │   │
+    │  │  C++ Server (libibverbs)                         │   │
+    │  │  ├─ RC QP + MR slab registration                 │   │
+    │  │  └─ CQ polling thread                            │   │
+    │  │                                                  │   │
+    │  │  Python layer                                    │   │
+    │  │  └─ _start(): metadata bus handshake via SRP     │   │
+    │  └──────────────────┬───────────────────────────────┘   │
+    │                     │ rogue Frame stream                 │
+    │                     ▼                                    │
+    │  ┌──────────────────────────────┐  ┌────────────────┐   │
+    │  │  pyrogue Application Devices │  │  pyrogue       │   │
+    │  │  StreamWriter / DataReceiver │  │  SRP/UDP       │   │
+    │  └──────────────────────────────┘  └────────────────┘   │
     └─────────────────────────────────────────────────────────┘
 
 Components
@@ -81,19 +82,11 @@ RoCEv2Server (Python / pyrogue)
 A :class:`pyrogue.Device` subclass (``pyrogue.protocols.RoCEv2Server``) that:
 
 * Owns the C++ ``Server`` instance.
-* In ``_start()``, runs the **connection handshake sequence**:
-
-  1. Reads ``qp_num``, ``gid``, ``mr_addr``, ``rkey`` from the C++ server.
-  2. Calls ``RoceEngine._setup_connection()`` which drives the metadata bus
-     to configure the FPGA's PD → MR → QP → INIT → RTR → RTS.
-  3. Returns only after the FPGA QP is confirmed in RTS state.
-
-RoceEngine (Python / pyrogue)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A :class:`pyrogue.Device` that maps the FPGA RoCEv2 engine's AXI-lite
-register block and provides high-level helper methods for encoding and
-sending metadata bus messages (see :doc:`../metadata/overview`).
+* Contains the metadata bus encoding/decoding logic directly (there is no
+  separate ``RoceEngine`` device — it is integrated into ``RoCEv2Server``).
+* In ``_start()``, drives the metadata bus over SRP/UDP to configure the
+  FPGA's PD → MR → QP → INIT → RTR → RTS, then tears everything down
+  cleanly in ``_stop()``.
 
 Memory Region Design
 ---------------------

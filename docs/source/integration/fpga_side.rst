@@ -1,15 +1,16 @@
 FPGA-Side Setup
 ===============
 
-The FPGA firmware contains a BSV-based RoCEv2 engine that manages its own
-RDMA resources internally.  This page describes the FPGA perspective.
+The FPGA firmware contains the SLAC RoCEv2 engine (distributed in the
+``surf`` library as compiled Verilog, originally written in BSV) that manages
+its own RDMA resources internally.  This page describes the FPGA perspective.
 
 Internal Resource Manager
 --------------------------
 
 The RoCEv2 engine implements a mini resource manager supporting:
 
-* Up to ``MAX_PD = 8`` Protection Domains.
+* **1** Protection Domain (``MAX_PD = 1`` — only one active connection at a time).
 * Up to ``MAX_MR_PER_PD`` Memory Regions per PD.
 * Queue Pairs, with configurable capacity.
 
@@ -43,7 +44,7 @@ Once the QP is in RTS state, the FPGA data path is::
         │  Packetizes into RoCEv2 / IB packets
         │  Applies DCQCN rate limiting
         ▼
-    100GbE MAC / PHY
+    10 GbE MAC / PHY
 
 WorkReqDispatcher Register Map
 --------------------------------
@@ -119,7 +120,7 @@ Firmware Configuration Summary
 The firmware registers that must be written by the host before data flow
 begins are:
 
-1. **Metadata bus sequence** (via ``RoceEngine`` AXI-lite):
+1. **Metadata bus sequence** (via ``RoCEv2Server`` / SRP/UDP):
 
    * PD allocate → get ``pdHandler``
    * MR allocate → get ``lkey`` (and internally store ``rkey``, ``addr``)

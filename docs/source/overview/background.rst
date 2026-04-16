@@ -26,7 +26,7 @@ This works well at gigabit speeds over a LAN, but has practical limits:
 
 * UDP requires kernel involvement on every packet.
 * RSSI adds per-packet sequence numbers and retransmission overhead.
-* At 100 GbE line rates, software UDP receive becomes the bottleneck.
+* At 10 GbE line rates, software UDP receive becomes the bottleneck.
 
 Why RoCEv2 / RDMA?
 -------------------
@@ -63,15 +63,17 @@ Key benefits over pure UDP in the rogue context:
      - ~µs (kernel overhead)
      - Sub-µs (bypass kernel)
    * - Bandwidth ceiling
-     - ~10–40 Gbps practical
-     - Line rate (100+ Gbps)
+     - ~1–10 Gbps practical
+     - Line rate (10+ Gbps)
 
-SLAC BSV RoCEv2 Engine
------------------------
+SLAC RoCEv2 Engine
+------------------
 
-The FPGA firmware uses a custom RoCEv2 engine written in
-`Bluespec SystemVerilog (BSV) <https://github.com/B-Lang-org/bsc>`_.  The
-engine is a full hardware RDMA stack that:
+The FPGA firmware uses a custom RoCEv2 engine developed at SLAC.  The engine
+was originally written in `Bluespec SystemVerilog (BSV)
+<https://github.com/B-Lang-org/bsc>`_ and is distributed in the
+`surf <https://github.com/slaclab/surf>`_ library as compiled Verilog.
+It is a full hardware RDMA stack that:
 
 * Manages its own **Protection Domain (PD)**, **Memory Region (MR)**, and
   **Queue Pair (QP)** resources internally.

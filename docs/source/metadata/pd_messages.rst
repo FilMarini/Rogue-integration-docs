@@ -81,13 +81,8 @@ Python Encoder
                (pd_key          << 212) | \
                pd_handler
 
-    def encode_free_pd(pd_handler: int) -> int:
-        """Encode a PD free request (allocOrNot=0)."""
-        pd_key = (pd_handler >> 3) & 0x1FFFFFFF  # strip 3-bit index
-        return (BUS_TYPE_PD     << 301) | \
-               (0               << 241) | \
-               (pd_key          << 212) | \
-               pd_handler
+``encode_free_pd(pd_handler: int) → int``
+    Encode a PD free request (``allocOrNot=0``).
 
 PD Response (RX bus)
 ---------------------

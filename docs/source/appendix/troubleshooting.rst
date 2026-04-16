@@ -5,9 +5,8 @@ Import Errors
 -------------
 
 ``ImportError: No module named rogue.protocols.rocev2``
-    Rogue was not built with ``-DROCEV2=ON``, or ``libibverbs`` was not
-    found at build time.  Rebuild with ``-DROCEV2=ON`` after installing
-    ``rdma-core``.
+    Rogue was built without ``libibverbs`` available, so the RoCEv2 module
+    was skipped.  Install ``rdma-core`` and rebuild rogue.
 
 ``ImportError: libibverbs.so.1: cannot open shared object file``
     ``rdma-core`` is installed but not on ``LD_LIBRARY_PATH``.  With
@@ -58,8 +57,10 @@ Metadata Bus Issues
       re-run the handshake.
 
 ``RoceMetaDataError: FPGA returned failure for PD alloc``
-    The FPGA's PD resource pool is exhausted (``MAX_PD = 8`` already
-    allocated).  Free unused PDs or reset the FPGA firmware.
+    The FPGA's PD resource pool is exhausted (``MAX_PD = 1`` — only one PD
+    is supported).  The previous session's PD was not freed, most likely
+    because the ZMQ server was killed without a clean shutdown.  Reset the
+    FPGA firmware before restarting.
 
 ``RecvMetaData stays 0 after first transaction``
     The FPGA state machine may have stalled.  This can happen if
@@ -77,7 +78,7 @@ Data Path Issues
 
 ``RxFrameCount not incrementing``
     * The FPGA QP may not have reached RTS.  Check
-      ``root.Rdma.QpState.get()``.
+      ``root.Rdma.ConnectionState.get()`` — it should read ``'Connected'``.
     * The WorkReqDispatcher ``RAddr``/``RKey`` may not match the host MR.
       Verify ``root.Rdma.MrAddr.get()`` equals the value written to
       ``engine.RAddr``.

@@ -62,7 +62,7 @@ Glossary
 
    MTU
       Maximum Transmission Unit.  The largest payload size for a single
-      RDMA packet.  For 100 GbE links, ``IBV_MTU_4096`` (4096 bytes) is
+      RDMA packet.  For 10 GbE links, ``IBV_MTU_4096`` (4096 bytes) is
       recommended.
 
    PD
@@ -106,7 +106,7 @@ Glossary
    RoCEv2
       RDMA over Converged Ethernet, version 2.  Carries IB transport
       semantics over standard Ethernet/IP/UDP frames.  Enables RDMA on
-      commodity 25/100 GbE networks.
+      commodity 10 GbE and above networks.
 
    rogue
       SLAC's software framework for FPGA interfacing.

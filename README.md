@@ -30,3 +30,7 @@ open build/html/index.html
 This repository is configured for automatic builds on
 [ReadTheDocs](https://readthedocs.org) via `.readthedocs.yaml`.
 
+## Licence
+
+SLAC National Accelerator Laboratory —
+see [LICENSE.txt](https://confluence.slac.stanford.edu/display/ppareg/LICENSE.html).

@@ -61,21 +61,8 @@ Exposed via ``bp::scope().attr()`` in the module ``setup_python()``:
 Usage from Python
 -----------------
 
-The C++ ``Server`` is normally not used directly — it is owned by
-``RoCEv2Server``.  For low-level testing:
-
-.. code-block:: python
-
-    import rogue.protocols.rocev2 as rv2
-
-    srv = rv2.Server('mlx5_0',
-                     rxQueueDepth = rv2.DefaultRxQueueDepth,
-                     maxPayload   = rv2.DefaultMaxPayload)
-
-    print(f"QP num: {srv.getQpNum():#010x}")
-    print(f"GID:    {srv.getGid()}")
-    print(f"MR addr:{srv.getMrAddr():#018x}")
-    print(f"MR rkey:{srv.getMrRkey():#010x}")
+The C++ ``Server`` is owned by ``RoCEv2Server`` and is not used directly
+in application code.
 
 Build Dependencies
 ------------------
@@ -86,7 +73,8 @@ The C++ module requires:
 * A C++17-capable compiler
 * cmake ≥ 3.15
 
-The module is compiled only when ``-DROCEV2=ON`` is passed to cmake (see
+The module is compiled automatically when ``libibverbs`` is found at cmake
+configure time (see
 :doc:`../appendix/build`).  If ``rdma-core`` is not found, the RoCEv2 module
 is silently skipped and the rest of rogue builds normally.
 

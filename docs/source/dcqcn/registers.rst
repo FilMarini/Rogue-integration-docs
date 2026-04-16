@@ -2,8 +2,8 @@ DCQCN Registers
 ================
 
 The DCQCN parameters are exposed as AXI-lite registers in the RoCEv2 engine
-register block.  They are configured by the host via SRP/UDP using pyrogue
-``RemoteVariable`` entries in the ``RoceEngine`` device.
+register block.  They are configured by the host via SRP/UDP as part of
+``RoCEv2Server._start()``.
 
 All timing registers store values in **clock cycles** (cc), not microseconds.
 The conversion is::
@@ -61,13 +61,15 @@ Register Map
      - ``[9:0]``
      - 10
      - ``AlphaG``
-     - Alpha EWMA weight in 10-bit fixed point.
-       The firmware computes ``α ← (1 − g) · α + g · 1`` on each CNP,
-       where the stored value is ``round((1 − g) × 1024)``.
-       A value of 1023 means ``g ≈ 0.001`` (slow adaptation);
-       a value of 512 means ``g = 0.5`` (fast adaptation).
+     - Alpha EWMA weight, stored as a 10-bit fixed-point representation
+       of **(1 − g)**, scaled by 1024:
+       ``ALPHA_G = round((1 − g) × 1024)``.
+       On each CNP the firmware computes
+       ``α ← ALPHA_G/1024 · α + (1 − ALPHA_G/1024) · 1``,
+       i.e. a value of 1023 gives ``g ≈ 0.001`` (slow alpha growth);
+       a value of 512 gives ``g = 0.5`` (fast alpha growth).
        *Type*: UInt10 (fixed-point, dimensionless).
-       *Default*: 1023 (``g ≈ 0.001``).
+       *Default*: 1023.
    * - ``0x010``
      - ``[0]``
      - 1
@@ -141,8 +143,10 @@ These variables should be added to the ``RoceEngine`` pyrogue Device:
 
     self.add(pr.RemoteVariable(
         name        = 'DcqcnAlphaG',
-        description = 'Alpha EWMA weight. Stored as round((1-g)*1024). '
-                      '1023 → g≈0.001 (slow). 512 → g=0.5 (fast).',
+        description = 'Alpha EWMA weight. Stored as round((1-g)*1024) '
+                      'where the register value represents (1-g). '
+                      '1023 → g≈0.001 (slow alpha growth). '
+                      '512 → g=0.5 (fast alpha growth).',
         offset      = 0x00C,
         bitSize     = 10,
         mode        = 'RW',
@@ -194,21 +198,4 @@ the QP handshake:
         engine.DcqcnRai.set(bps(50))
         engine.DcqcnRhai.set(bps(500))
 
-Tuning Guidelines
-------------------
 
-These are general starting points; optimal values depend on your network
-topology, switch buffer sizes, and target data rate.
-
-* **Latency-sensitive, low-rate** (< 10 Gbps): increase ``RateIncInt`` to
-  reduce oscillation; decrease ``AlphaG`` for slower alpha decay.
-* **High-rate, bursty** (> 50 Gbps): decrease ``RateIncInt`` for faster
-  recovery; increase ``R_hai`` for more aggressive ramp-up after congestion.
-* **Lossless switch fabric** (PFC enabled): DCQCN still helps avoid head-of-
-  line blocking; ``ClampTgtRate = 1`` can reduce overshoot.
-* **Single flow, no competing traffic**: DCQCN parameters matter less; the
-  defaults are conservative and safe.
-
-For a detailed treatment of the parameter space, refer to the original
-DCQCN paper (Zhu et al., SIGCOMM 2015) and the follow-up analysis by
-Mittal et al. (2018).

@@ -6,7 +6,7 @@ capability into the `rogue` software framework developed at SLAC National
 Accelerator Laboratory.
 
 The integration allows rogue to receive high-speed data frames from an FPGA
-equipped with a BSV-based RoCEv2 engine performing **RDMA WRITE-with-Immediate**
+equipped with a SLAC RoCEv2 engine performing **RDMA WRITE-with-Immediate**
 operations, while preserving the same :mod:`pyrogue` usage patterns as the
 existing UDP/RSSI-based workflow.
 

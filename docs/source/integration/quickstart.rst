@@ -4,84 +4,52 @@ Quick Start
 Prerequisites
 -------------
 
-* A host with an RDMA-capable NIC (RoCEv2 mode, e.g. Mellanox/NVIDIA ConnectX).
+* A host with an RDMA-capable NIC in RoCEv2 mode (e.g. Mellanox/NVIDIA
+  ConnectX), or a softRoCE interface (``rxe0``).
 * ``rdma-core`` / ``libibverbs`` installed (available via conda-forge as
   ``rdma-core``).
-* Rogue built with ``-DROCEV2=ON`` (see :doc:`../appendix/build`).
-* An FPGA loaded with firmware that includes the BSV RoCEv2 engine and the
+* Rogue built from source with ``libibverbs`` available at build time
+  (see :doc:`../appendix/build`).
+* An FPGA loaded with firmware that includes the SLAC RoCEv2 engine and the
   SRP/UDP register path.
 
-Minimal Example
----------------
+Example Design
+--------------
 
-The following snippet mirrors the pattern of the existing
-:class:`pyrogue.protocols.UdpRssiPack` — drop-in replacement for the
-stream data path:
+A complete working example — including the pyrogue root, ``RoCEv2Server``
+instantiation, SRP/UDP wiring, and ZMQ server startup — can be found in the
+``Simple-10GbE-RUDP-KCU105-Example`` repository on GitHub:
 
-.. code-block:: python
+    https://github.com/slaclab/Simple-10GbE-RUDP-KCU105-Example
 
-    import pyrogue as pr
-    import pyrogue.protocols
-
-    class MyRoot(pr.Root):
-        def __init__(self, fpgaIp, **kwargs):
-            super().__init__(**kwargs)
-
-            # ── SRP / register access (unchanged) ──────────────────────
-            udp  = rogue.protocols.udp.Client(fpgaIp, 8192, False)
-            srp  = rogue.protocols.srp.SrpV3()
-            udp  == srp
-
-            # ── RoCEv2 data stream (replaces UdpRssiPack) ───────────────
-            self.rdma = pyrogue.protocols.RoCEv2Server(
-                name         = 'RdmaRx',
-                fpgaIp       = fpgaIp,
-                rdmaDevice   = 'mlx5_0',    # ibv_devices to list
-                rxQueueDepth = 256,
-                maxPayload   = 8192,
-            )
-            self.add(self.rdma)
-
-            # Add the RoCEv2 engine register device under the same
-            # memory map as other FPGA peripherals
-            self.add(pyrogue.protocols.RoceEngine(
-                name   = 'RoceEngine',
-                memBase= srp,
-                offset = 0x0000_A000,       # base address of the engine
-            ))
-
-            # Wire the engine to the server so _start() can handshake
-            self.rdma.setEngine(self.RoceEngine)
-
-            # ── Application device ──────────────────────────────────────
-            self.add(MyDevice(
-                name    = 'Detector',
-                memBase = srp,
-                offset  = 0x0000_0000,
-            ))
-            # Connect channel 0 of the RDMA stream to the device
-            self.rdma.application(0) >> self.Detector.dataStream
-
-    with MyRoot(fpgaIp='192.168.1.10') as root:
-        pr.streamTap(root.rdma.application(0), pr.utilities.fileio.StreamWriter())
-        root.start()
-        # … run …
-
-.. note::
-   ``RoCEv2Server.application(channelId)`` returns a stream master/slave
-   interface identical to ``packetizer.Core.application(dest)``.  Existing
-   code that connects the packetizer output needs no change — just swap the
-   object.
+Refer to that repository's ``startZmq.py`` and associated root class for a
+concrete integration pattern.
 
 Checking the Connection
 -----------------------
 
 After ``root.start()`` the Python layer has completed the FPGA handshake.
-You can verify the RDMA link with:
+You can verify the RDMA link from a ZMQ client with:
 
 .. code-block:: python
 
-    print(root.RdmaRx.QpState.get())    # should be 'RTS'
-    print(root.RdmaRx.MrAddr.get())     # host MR virtual address
-    print(root.RdmaRx.MrRkey.get())     # host MR rkey (sent to FPGA)
-    print(root.RdmaRx.RxFrameCount.get())  # increments with each RDMA WRITE
+    import pyrogue.interfaces
+
+    with pyrogue.interfaces.VirtualClient(addr='localhost', port=9099) as c:
+        rx = c.root.rdmaRx   # adjust path to match your root
+
+        print('ConnectionState :', rx.ConnectionState.get())  # 'Connected'
+        print('FpgaIp          :', rx.FpgaIp.get())
+        print('FpgaGid         :', rx.FpgaGid.get())
+        print('HostQpn         :', hex(rx.HostQpn.get()))
+        print('HostGid         :', rx.HostGid.get())
+        print('HostRqPsn       :', hex(rx.HostRqPsn.get()))
+        print('HostSqPsn       :', hex(rx.HostSqPsn.get()))
+        print('MrAddr          :', hex(rx.MrAddr.get()))
+        print('MrRkey          :', hex(rx.MrRkey.get()))
+        print('FpgaQpn         :', hex(rx.FpgaQpn.get()))
+        print('FpgaLkey        :', hex(rx.FpgaLkey.get()))
+        print('MaxPayload      :', rx.MaxPayload.get())
+        print('RxQueueDepth    :', rx.RxQueueDepth.get())
+        print('RxFrameCount    :', rx.RxFrameCount.get())
+        print('RxByteCount     :', rx.RxByteCount.get())

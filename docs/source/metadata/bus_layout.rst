@@ -9,7 +9,7 @@ Constant Definitions
 --------------------
 
 The following constants appear throughout the field tables.  They are defined
-in the pyrogue layer (``_RoceEngine.py``) and in the BSV firmware.
+in the pyrogue layer and in the FPGA firmware.
 
 .. list-table::
    :header-rows: 1
@@ -26,7 +26,9 @@ in the pyrogue layer (``_RoceEngine.py``) and in the BSV firmware.
      - Total width of the RX metadata bus
    * - ``PD_INDEX_B``
      - 3
-     - Bits to index ``MAX_PD = 8`` Protection Domains
+     - Bits to index ``MAX_PD`` Protection Domains.  Note: the engine
+       currently supports ``MAX_PD = 1``; only one PD can be active at
+       a time.
    * - ``PD_ALLOC_OR_NOT_B``
      - 1
      - Allocate (1) or free (0) flag
@@ -268,4 +270,4 @@ Path MTU Encoding
      - 2048
    * - 5
      - ``IBV_MTU_4096``
-     - 4096 (recommended for 100GbE)
+     - 4096 (recommended for 10 GbE links)
