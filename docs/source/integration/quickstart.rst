@@ -24,8 +24,8 @@ instantiation, SRP/UDP wiring, and ZMQ server startup — can be found in the
 
     https://github.com/slaclab/Simple-10GbE-RUDP-KCU105-Example
 
-Refer to that repository's ``startZmq.py`` and associated root class for a
-concrete integration pattern.
+For a step-by-step walkthrough of building the firmware, launching the server,
+and verifying a data transfer, see :doc:`running_example`.
 
 Checking the Connection
 -----------------------

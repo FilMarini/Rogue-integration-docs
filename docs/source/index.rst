@@ -28,6 +28,7 @@ existing UDP/RSSI-based workflow.
    integration/connection_lifecycle
    integration/dma_interface
    integration/test_firmware
+   integration/running_example
 
 .. toctree::
    :maxdepth: 2
