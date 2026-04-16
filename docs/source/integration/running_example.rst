@@ -19,16 +19,22 @@ Prerequisites
 Step 1 — Build the Firmware with RoCEv2 Enabled
 ------------------------------------------------
 
-Open the target's top-level VHDL or tcl build file and ensure the generic
-is set:
+Open the target's top-level entity and ensure the generic is set to ``true``:
 
 .. code-block:: vhdl
 
     ROCEV2_EN_G => true
 
-Then build the bitfile using Vivado as usual (``make`` or ``source build.tcl``
-depending on the project).  Without ``ROCEV2_EN_G => true`` the RoCEv2 engine
-is excluded from the design and the firmware will behave as a plain UDP device.
+Then build the bitfile using ruckus:
+
+.. code-block:: bash
+
+    make bit
+
+.. note::
+   If ``ROCEV2_EN_G`` is ``false``, the RoCEv2 engine is excluded from the
+   design and the firmware behaves exactly like the original example design,
+   using plain UDP/RSSI for data transport.
 
 Step 2 — Set Up the Network Link
 ---------------------------------
@@ -53,7 +59,7 @@ with the actual name, e.g. ``enp34s0``):
     sudo modprobe rdma_rxe
     sudo rdma link add rxe0 type rxe netdev <interface>
 
-Verify the link is active before proceeding:
+Verify the RDMA link is active before proceeding:
 
 .. code-block:: bash
 
@@ -61,9 +67,9 @@ Verify the link is active before proceeding:
     # Expected:
     # link rxe0/1 state ACTIVE physical_state LINK_UP netdev <interface>
 
-The ``state ACTIVE`` line confirms the RDMA link is ready.  The ``--roceDevice``
-argument passed to ``startZmq.py`` is the RDMA device name shown by
-``rdma link`` — in the example above that is ``rxe0``.
+The ``state ACTIVE`` line confirms the RDMA link is ready.  The name to pass
+as ``--roceDevice`` is the RDMA device name shown on the left of this output
+— in the example above that is ``rxe0``.
 
 Step 3 — Launch the ZMQ Server
 --------------------------------
@@ -81,8 +87,7 @@ From the ``software/scripts/`` directory of the example project:
         --roceMinRnrTimer 31 \
         --roceRnrRetry    7 \
         --roceRetryCount  3 \
-        --roceMaxPay      1024 \
-        --useDcqcn
+        --roceMaxPay      1024
 
 Argument reference:
 
@@ -101,7 +106,7 @@ Argument reference:
        SoftRoCE, ``mlx5_0`` for a hardware NIC).
    * - ``--rocePmtu``
      - Path MTU code passed to the FPGA QP.  ``5`` = 4096 bytes
-       (``IBV_MTU_4096``), which is recommended for 10 GbE.
+       (``IBV_MTU_4096``), recommended for 10 GbE.
    * - ``--roceOffset``
      - AXI-lite byte offset of the RoCEv2 engine register block within
        the FPGA address map.  Must match the firmware.
@@ -109,7 +114,8 @@ Argument reference:
    * - ``--roceMinRnrTimer``
      - Minimum RNR NAK timer value set on the host QP.  Controls the
        minimum time the host signals it needs before the FPGA may retry
-       after an RNR.  ``31`` ≈ 491 ms (maximum, recommended for SoftRoCE).
+       after an RNR NAK.  ``31`` ≈ 491 ms (maximum, recommended for
+       SoftRoCE).
    * - ``--roceRnrRetry``
      - Number of times the FPGA retries after receiving an RNR NAK.
        ``7`` = infinite retries.
@@ -119,19 +125,58 @@ Argument reference:
    * - ``--roceMaxPay``
      - Maximum payload size in bytes per RDMA WRITE slot.  Must be ≤ the
        path MTU.  Example: ``1024``.
-   * - ``--useDcqcn``
-     - Enable DCQCN congestion control registers on startup.
 
-Once the server is running you should see output similar to::
+Expected output
+~~~~~~~~~~~~~~~
 
-    Rogue/pyrogue version v6.x.x  https://github.com/slaclab/rogue
-    Start: Started zmqServer on ports 9099-9101
-        To start a gui: python -m pyrogue gui --server='localhost:9099'
-        To use a virtual client: client = pyrogue.interfaces.VirtualClient(...)
+If the RDMA connection is established successfully the server prints the
+full connection summary.  A typical successful run looks like::
 
-A successful RDMA connection will produce log lines showing the metadata
-bus handshake completing and ``ConnectionState`` transitioning to
-``'Connected'``.
+    Rogue/pyrogue version v6.10.1  https://github.com/slaclab/rogue
+    INFO:pyrogue.Root.Root.Root:Making device Root
+    INFO:...rdmaRx:RoCEv2 'rdmaRx': QPN=0x000017  GID=...  MR=0x62931ea90000  rkey=0x0000087c  FPGA GID=...
+    INFO:...rdmaRx:RoceEngine: PD allocated handler=0x06a56240
+    INFO:...rdmaRx:RoceEngine: MR allocated lkey=0x19a02fe6 rkey=0x3988d946
+    INFO:...rdmaRx:RoceEngine: QP created fpga_qpn=0xa56240
+    INFO:...rdmaRx:RoceEngine: QP → INIT
+    INFO:...rdmaRx:RoceEngine: QP → RTR targeting host qpn=0x000017
+    INFO:...rdmaRx:RoceEngine: QP → RTS — FPGA ready to send RDMA WRITEs
+    INFO:...rdmaRx:============================================================
+    INFO:...rdmaRx:RoCEv2 FPGA connection summary
+    INFO:...rdmaRx:  FPGA QPN    : 0xa56240
+    INFO:...rdmaRx:  FPGA lkey   : 0x19a02fe6
+    INFO:...rdmaRx:  FPGA state  : RTS (ready to send RDMA WRITEs)
+    INFO:...rdmaRx:  Host QPN    : 0x000017
+    INFO:...rdmaRx:  Host RQ PSN : 0x8b4567
+    INFO:...rdmaRx:  Host SQ PSN : 0x7b23c6
+    INFO:...rdmaRx:  MR addr     : 0x000062931ea90000
+    INFO:...rdmaRx:  MR length   : 262144 bytes
+    INFO:...rdmaRx:  Path MTU    : 5 (4096 bytes)
+    INFO:...rdmaRx:============================================================
+    INFO:...rdmaRx:RoCEv2 host RC connection summary
+    INFO:...rdmaRx:  Device      : rxe0  port=1  GID idx=1
+    INFO:...rdmaRx:  Host QPN    : 0x000017
+    INFO:...rdmaRx:  Host GID    : 0000:0000:0000:0000:0000:ffff:c0a8:0264
+    INFO:...rdmaRx:  Host state  : RTS
+    INFO:...rdmaRx:  MR addr     : 0x000062931ea90000
+    INFO:...rdmaRx:  MR rkey     : 0x0000087c
+    INFO:...rdmaRx:  MR size     : 262144 bytes  (256 slots x 1024 bytes)
+    INFO:...rdmaRx:  FPGA QPN    : 0xa56240
+    INFO:...rdmaRx:  FPGA lkey   : 0x19a02fe6
+    INFO:...rdmaRx:  FPGA GID    : 0000:0000:0000:0000:0000:ffff:c0a8:020a
+    INFO:...rdmaRx:  Path MTU    : 5 (4096 bytes)
+    INFO:...rdmaRx:  MinRnrTimer : 31
+    INFO:...rdmaRx:  RnrRetry    : 7
+    INFO:...rdmaRx:  RetryCount  : 3
+    INFO:...rdmaRx:  RC connection established — ready to receive RDMA WRITEs
+    INFO:...rdmaRx:============================================================
+    INFO:pyrogue.Root.Root.Root:Root lifecycle started
+    Running. Hit cntrl-c or send SIGTERM to <pid> to exit.
+
+The two summary blocks confirm both sides of the connection.  The key line
+to look for is::
+
+    RC connection established — ready to receive RDMA WRITEs
 
 Step 4 — Launch the GUI
 -----------------------
@@ -149,23 +194,11 @@ The GUI tree will show the full device hierarchy.  Navigate to the
 Step 5 — Open a Stream Writer File
 ------------------------------------
 
-In the GUI, navigate to **DataWriter** (or **StreamWriter**) and:
+In the GUI, navigate to **DataWriter** and:
 
 1. Set the **DataFile** field to your desired output path, e.g.
    ``/tmp/test_roce.dat``.
-2. Click **Open** (or set ``Open = True``).
-
-The file writer is now recording all incoming RDMA frames to disk.
-
-Alternatively, from a ZMQ client script:
-
-.. code-block:: python
-
-    import pyrogue.interfaces
-
-    with pyrogue.interfaces.VirtualClient(addr='localhost', port=9099) as c:
-        c.root.DataWriter.DataFile.set('/tmp/test_roce.dat')
-        c.root.DataWriter.Open.set(True)
+2. Click **Open**.
 
 Step 6 — Dispatch Work Requests
 ---------------------------------
@@ -177,32 +210,22 @@ From the ``software/scripts/`` directory:
 
     python3 runDispatch.py --cases 100
 
-This sends 100 RDMA WRITEs from the FPGA.  The ``--cases`` argument sets
-the number of work requests dispatched.
-
-While dispatching, watch the GUI — ``rdmaRx.RxFrameCount`` should increment
-with each received frame.  The ``WorkCompChecker.SuccessCounter`` register on
-the FPGA side should match the number of dispatched cases.
+This sends 100 RDMA WRITEs from the FPGA.  While dispatching, watch the
+GUI — ``rdmaRx.RxFrameCount`` should increment with each received frame.
+The ``WorkCompChecker.SuccessCounter`` register on the FPGA side should
+match the number of dispatched cases.
 
 Step 7 — Close the Stream Writer File
 ---------------------------------------
 
-Once ``RxFrameCount`` matches the number of dispatched cases, close the file:
-
-In the GUI, click **Close** on the DataWriter, or from a script:
-
-.. code-block:: python
-
-    with pyrogue.interfaces.VirtualClient(addr='localhost', port=9099) as c:
-        c.root.DataWriter.Open.set(False)
-        print('File size:', c.root.DataWriter.FileSize.get(), 'bytes')
-        print('Frames written:', c.root.DataWriter.FrameCount.get())
+Once ``RxFrameCount`` in the GUI matches the number of dispatched cases,
+navigate back to **DataWriter** and click **Close**.
 
 Step 8 — Verify the Data
 --------------------------
 
 Check that the written data is correct and contiguous using the
-``fileReader.py`` utility from the ``software/scripts/`` directory:
+``fileReader.py`` utility:
 
 .. code-block:: bash
 
@@ -221,30 +244,27 @@ Expected output on success::
     Contiguity: OK — no gaps detected
 
 The ``--check-cont`` flag verifies that the byte pattern written by
-``DmaTestPatternServer`` is continuous across frame boundaries (no gaps,
-no resets to 0x00 between frames).  Any gap indicates a missed or
+``DmaTestPatternServer`` is continuous across frame boundaries — no gaps
+and no resets to ``0x00`` between frames.  Any gap indicates a missed or
 out-of-order RDMA WRITE.
 
 Troubleshooting the Example
 ----------------------------
 
-**Server exits immediately with "FPGA PD allocation failed"**
+**Server exits with "FPGA PD allocation failed"**
     The FPGA firmware was not reset between runs and the previous session's
-    PD was not freed.  Power-cycle the KCU105 or reload the bitfile, then
-    relaunch the server.  See :doc:`connection_lifecycle` for why
-    ``MAX_PD = 1`` makes this necessary.
+    PD was not freed (``MAX_PD = 1``).  Power-cycle the KCU105 or reload
+    the bitfile, then relaunch.  See :doc:`connection_lifecycle` for details.
 
 **``rdma link`` shows ``state ACTIVE`` but ping to 192.168.2.10 fails**
-    The host interface IP is not in the same subnet as the FPGA.  Verify
-    with ``ip addr show <interface>`` and reassign if needed.
+    The host interface IP is not in the same subnet.  Verify with
+    ``ip addr show <interface>`` and reassign if needed.
 
 **Frames are received but ``fileReader.py`` reports gaps**
-    Increase ``--roceMinRnrTimer`` to give the host more time to drain
-    the MR slots between writes.  With SoftRoCE under load, ``31``
-    (491 ms) is recommended.  Also check ``WorkCompChecker.UnsuccessCounter``
-    — non-zero means some WRITEs failed at the RDMA level.
+    Some RDMA WRITEs arrived while the host MR slots were not yet drained.
+    Increase ``--roceMinRnrTimer`` to ``31`` (491 ms) and check
+    ``WorkCompChecker.UnsuccessCounter`` for non-zero values.
 
 **``RxFrameCount`` is lower than ``--cases``**
-    Some WRITEs were dropped.  Check ``WorkCompChecker.UnsuccessCounter``
-    and ``rdmaRx.RxByteCount`` to distinguish between RDMA-level failures
-    and host-side drops.
+    Check ``WorkCompChecker.UnsuccessCounter`` and ``rdmaRx.RxByteCount``
+    to distinguish between RDMA-level failures and host-side drops.
