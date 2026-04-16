@@ -8,8 +8,8 @@ Prerequisites
   ConnectX), or a softRoCE interface (``rxe0``).
 * ``rdma-core`` / ``libibverbs`` installed (available via conda-forge as
   ``rdma-core``).
-* Rogue built from source with ``libibverbs`` available at build time
-  (see :doc:`../appendix/build`).
+* Rogue built from source with ``-DROCEV2=ON`` and ``libibverbs`` available
+  at build time (see :doc:`../appendix/build`).
 * An FPGA loaded with firmware that includes the SLAC RoCEv2 engine and the
   SRP/UDP register path.
 

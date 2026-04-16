@@ -18,8 +18,9 @@ Prerequisites
 cmake Configuration
 -------------------
 
-The RoCEv2 module is compiled automatically when ``libibverbs`` is found
-at cmake configure time.  There is no separate opt-in flag required:
+The RoCEv2 module is enabled by passing ``-DROCEV2=ON`` to cmake.  If the
+flag is not set, the module is not compiled even if ``libibverbs`` is
+present on the system:
 
 .. code-block:: bash
 
@@ -28,19 +29,15 @@ at cmake configure time.  There is no separate opt-in flag required:
     mkdir build && cd build
 
     cmake .. \
+        -DROCEV2=ON \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX
 
     make -j$(nproc)
     make install
 
-If ``libibverbs`` is not found, the RoCEv2 module is silently skipped and
-the rest of rogue builds normally.
-
-.. note::
-   A ``-DROCEV2=ON`` cmake flag to make the dependency explicit and
-   fail the build if ``libibverbs`` is missing would be a useful addition,
-   but is not currently implemented.
+If ``libibverbs`` / ``rdma-core`` is not found when ``-DROCEV2=ON`` is set,
+cmake will exit with an error.
 
 Verifying the Build
 -------------------

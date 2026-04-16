@@ -5,8 +5,9 @@ Import Errors
 -------------
 
 ``ImportError: No module named rogue.protocols.rocev2``
-    Rogue was built without ``libibverbs`` available, so the RoCEv2 module
-    was skipped.  Install ``rdma-core`` and rebuild rogue.
+    Rogue was not built with ``-DROCEV2=ON``, or ``libibverbs`` was not
+    found at build time.  Rebuild with ``-DROCEV2=ON`` after installing
+    ``rdma-core`` (see :doc:`build`).
 
 ``ImportError: libibverbs.so.1: cannot open shared object file``
     ``rdma-core`` is installed but not on ``LD_LIBRARY_PATH``.  With

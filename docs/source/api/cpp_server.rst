@@ -73,8 +73,7 @@ The C++ module requires:
 * A C++17-capable compiler
 * cmake ≥ 3.15
 
-The module is compiled automatically when ``libibverbs`` is found at cmake
-configure time (see
+The module is compiled when ``-DROCEV2=ON`` is passed to cmake (see
 :doc:`../appendix/build`).  If ``rdma-core`` is not found, the RoCEv2 module
 is silently skipped and the rest of rogue builds normally.
 
