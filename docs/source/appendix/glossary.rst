@@ -119,6 +119,14 @@ Glossary
       WRITEs directly into the MR), so RNR NAKs should not occur during
       normal operation.
 
+   SoftRoCE
+      A software implementation of RoCEv2 built into the Linux kernel
+      (kernel module ``rdma_rxe``).  It emulates a RoCEv2 RDMA device on
+      top of any standard Ethernet NIC, allowing RDMA development and
+      testing without dedicated RDMA hardware.  Activated with
+      ``sudo modprobe rdma_rxe`` and
+      ``sudo rdma link add rxe0 type rxe netdev <interface>``.
+
    SRP
       SLAC Register Protocol.  The protocol used by rogue for AXI-lite
       register access over UDP.

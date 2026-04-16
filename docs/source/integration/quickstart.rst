@@ -5,7 +5,9 @@ Prerequisites
 -------------
 
 * A host with an RDMA-capable NIC in RoCEv2 mode (e.g. Mellanox/NVIDIA
-  ConnectX), or a softRoCE interface (``rxe0``).
+  ConnectX), **or** a SoftRoCE interface (``rxe0``) on any standard Ethernet
+  NIC — no dedicated RDMA hardware is required for testing.  See
+  :doc:`../appendix/build` for SoftRoCE setup instructions.
 * ``rdma-core`` / ``libibverbs`` installed (available via conda-forge as
   ``rdma-core``).
 * Rogue built from source with ``-DROCEV2=ON`` and ``libibverbs`` available

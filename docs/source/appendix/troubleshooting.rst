@@ -95,6 +95,40 @@ Data Path Issues
     The ``FrameLen`` written to the WorkReqDispatcher must match
     ``maxPayload`` used when registering the MR.
 
+SoftRoCE Issues
+---------------
+
+``rdma link add rxe0 type rxe netdev eth0`` fails with "Operation not supported"
+    The ``rdma_rxe`` kernel module is not loaded.  Run
+    ``sudo modprobe rdma_rxe`` and retry.
+
+``rdma link show`` shows ``rxe0`` but ``ibv_devices`` is empty
+    The ``rdma-core`` userspace library is not seeing the kernel device.
+    Try ``sudo rdma link show`` — permissions may be required.  Also ensure
+    the ``rdma-core`` package is installed (not just ``libibverbs``).
+
+``ibv_devinfo`` reports port state ``DOWN`` on ``rxe0``
+    The underlying Ethernet interface is down or has no IP address.
+    Bring it up: ``sudo ip link set eth0 up`` and assign an IP if needed.
+
+SoftRoCE connection established but no frames received
+    SoftRoCE uses the Linux network stack, so ensure there is no firewall
+    rule blocking UDP port 4791 (the mandatory RoCEv2 port)::
+
+        sudo iptables -I INPUT -p udp --dport 4791 -j ACCEPT
+        sudo iptables -I OUTPUT -p udp --sport 4791 -j ACCEPT
+
+    Also verify the FPGA can reach the host IP on the interface attached
+    to ``rxe0``.
+
+``rxe0`` disappears after reboot
+    The ``rdma link add`` command is not persistent.  To restore it on
+    boot, create a systemd service or add to a network startup script::
+
+        # /etc/networkd-dispatcher/routable.d/50-rxe0
+        #!/bin/bash
+        [ "$IFACE" = "eth0" ] && rdma link add rxe0 type rxe netdev eth0
+
 Performance Issues
 ------------------
 
